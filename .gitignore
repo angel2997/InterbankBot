@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# SQLite
+*.db
+*.sqlite
+
+# Logs
+logs/*.log
+
+# PDFs descargados
+pdf/*.pdf
+
+# CSV temporales
+csv/*.csv
+
+# TXT finales
+txt/*.txt
+
+# Configuración sensible
+config/.env
+config.ini.local
+
+# VS Code
+.vscode/
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# .env
+.env
+.env.*

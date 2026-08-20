@@ -1,0 +1,12 @@
+pypdf
+requests
+python-dotenv
+
+**************
+
+msal
+O365
+pywhatkit
+python-telegram-bot
+pdfplumber
+pandas
