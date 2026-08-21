@@ -6,6 +6,8 @@ auth = AuthService()
 
 token = auth.login()
 
+print(token)
+
 access_token = token["access_token"]
 
 headers = {
