@@ -87,3 +87,25 @@ class EstadoRepository:
             )
 
         return cursor.rowcount == 1
+
+    def get_id_by_pdf(self, pdf_path):
+        file_hash = self.calculate_hash(pdf_path)
+
+        with get_connection() as connection:
+            row = connection.execute(
+                """
+                SELECT id
+                FROM estados_procesados
+                WHERE hash_archivo = ?
+                """,
+                (file_hash,),
+            ).fetchone()
+
+        if row is None:
+            raise LookupError(
+                "El estado de cuenta aún no está registrado"
+            )
+
+        return row["id"]
+
+    
