@@ -34,3 +34,6 @@ Desktop.ini
 # .env
 .env
 .env.*
+
+# Cache local de autenticacion MSAL
+data/msal_cache.bin
