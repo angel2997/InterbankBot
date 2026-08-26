@@ -88,3 +88,133 @@ class AsignacionRepository:
             ).fetchone()
 
         return row["total"]
+
+
+    def list_pending_angel_consumptions(
+        self,
+        estado_id,
+    ):
+        with get_connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    id,
+                    fecha,
+                    descripcion,
+                    monto_soles_centimos,
+                    monto_dolares_centimos
+                FROM consumos
+                WHERE estado_id = ?
+                  AND titular = ?
+                  AND persona_id IS NULL
+                  AND asignacion = ?
+                ORDER BY id
+                """,
+                (
+                    estado_id,
+                    "Angel",
+                    "PENDIENTE",
+                ),
+            ).fetchall()
+
+        return [
+            {
+                "id": row["id"],
+                "fecha": row["fecha"],
+                "descripcion": row["descripcion"],
+                "soles": (
+                    row["monto_soles_centimos"] / 100
+                ),
+                "dolares": (
+                    row["monto_dolares_centimos"] / 100
+                ),
+            }
+            for row in rows
+        ]
+
+    def assign_consumption(
+        self,
+        consumption_id,
+        person_name,
+    ):
+        with get_connection() as connection:
+            person = connection.execute(
+                """
+                SELECT id, nombre
+                FROM personas
+                WHERE nombre = ?
+                """,
+                (person_name,),
+            ).fetchone()
+
+            if person is None:
+                raise LookupError(
+                    f"No existe la persona: {person_name}"
+                )
+
+            consumption = connection.execute(
+                """
+                SELECT id
+                FROM consumos
+                WHERE id = ?
+                  AND titular = ?
+                  AND asignacion = ?
+                  AND persona_id IS NULL
+                """,
+                (
+                    consumption_id,
+                    "Angel",
+                    "PENDIENTE",
+                ),
+            ).fetchone()
+
+            if consumption is None:
+                raise LookupError(
+                    "El consumo no existe o ya fue asignado"
+                )
+
+            cursor = connection.execute(
+                """
+                UPDATE consumos
+                SET persona_id = ?,
+                    persona_asignada = ?,
+                    asignacion = ?
+                WHERE id = ?
+                  AND persona_id IS NULL
+                """,
+                (
+                    person["id"],
+                    person["nombre"],
+                    "MANUAL",
+                    consumption_id,
+                ),
+            )
+
+        return cursor.rowcount == 1
+
+    def get_consumption_assignment(
+        self,
+        consumption_id,
+    ):
+        with get_connection() as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    c.id,
+                    c.descripcion,
+                    c.asignacion,
+                    p.nombre AS persona
+                FROM consumos AS c
+                LEFT JOIN personas AS p
+                    ON p.id = c.persona_id
+                WHERE c.id = ?
+                """,
+                (consumption_id,),
+            ).fetchone()
+
+        if row is None:
+            raise LookupError(
+                "No existe el consumo"
+            )
+
+        return dict(row)
