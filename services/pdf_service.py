@@ -20,6 +20,24 @@ TRANSACTION_PATTERN = re.compile(
     r"(?:\s+(?P<dollars>-?[\d,]+\.\d{2}))?\s*$"
 )
 
+PAYMENT_MONTH_PATTERN = re.compile(
+    r"PAGO\s+DEL\s+MES"
+    r".*?"
+    r"(?P<soles>-?[\d,]+\.\d{2})"
+    r"\s+"
+    r"(?P<dollars>-?[\d,]+\.\d{2})",
+    re.IGNORECASE,
+)
+
+INSURANCE_PATTERN = re.compile(
+    r"\d{2}-[A-Za-z]{3}\s+"
+    r"SEGURO(?:\s+DE)?\s+DESGRAVAMEN"
+    r"\s+"
+    r"(?P<soles>-?[\d,]+\.\d{2})"
+    r"(?:\s+(?P<dollars>-?[\d,]+\.\d{2}))?",
+    re.IGNORECASE,
+)
+
 
 class PdfService:
 
@@ -80,10 +98,19 @@ class PdfService:
                 "Verifica la contraseña."
             ) from error
 
-    def extract_consumptions(self, pdf_path):
-        """Extrae consumos de Angel, Nayeli y el seguro."""
+    def extract_consumptions(
+        self,
+        pdf_path,
+    ):
+        """
+        Extrae consumos de Angel, Nayeli,
+        seguro de desgravamen y resumen del pago.
+        """
 
-        result = self.extract_text(pdf_path)
+        result = self.extract_text(
+            pdf_path
+        )
+
         text = result["text"]
 
         angel_text = self._extract_section(
@@ -122,11 +149,99 @@ class PdfService:
             assignment="NO_ASIGNAR",
         )
 
+        statement_summary = (
+            self.extract_statement_summary(
+                text
+            )
+        )
+
         return {
             "angel": angel,
             "nayeli": nayeli,
             "insurance": insurance,
+            "statement_summary": (
+                statement_summary
+            ),
             "page_count": result["page_count"],
+        }
+
+    def extract_statement_summary(
+        self,
+        text,
+    ):
+        normalized_lines = [
+            " ".join(line.split())
+            for line in text.splitlines()
+            if line.strip()
+        ]
+
+        normalized_text = " ".join(
+            normalized_lines
+        )
+
+        payment = (
+            self._extract_payment_month(
+                normalized_text
+            )
+        )
+
+        insurance = (
+            self._extract_insurance_amount(
+                normalized_text
+            )
+        )
+
+        return {
+            "payment_month": payment,
+            "insurance": insurance,
+        }
+
+    def _extract_payment_month(
+        self,
+        text,
+    ):
+        match = PAYMENT_MONTH_PATTERN.search(
+            text
+        )
+
+        if match is None:
+            raise ValueError(
+                "No se encontró el importe "
+                "PAGO DEL MES en el PDF"
+            )
+
+        return {
+            "soles": self._to_decimal(
+                match.group("soles")
+            ),
+            "dollars": self._to_decimal(
+                match.group("dollars")
+            ),
+        }
+
+    def _extract_insurance_amount(
+        self,
+        text,
+    ):
+        match = INSURANCE_PATTERN.search(
+            text
+        )
+
+        if match is None:
+            raise ValueError(
+                "No se encontró el importe "
+                "del seguro de desgravamen "
+                "en el PDF"
+            )
+
+        return {
+            "soles": self._to_decimal(
+                match.group("soles")
+            ),
+            "dollars": self._to_decimal(
+                match.group("dollars")
+                or "0.00"
+            ),
         }
 
     def _extract_section(
