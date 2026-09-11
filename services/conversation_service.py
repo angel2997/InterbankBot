@@ -586,6 +586,97 @@ class ConversationService:
             ),
         }
     
+
+    def undo_last_assignment(
+        self,
+        consumption_id,
+    ):
+        deleted_movement = (
+            self.movimiento_repository
+            .delete_last_movement(
+                consumption_id
+            )
+        )
+
+        balance = (
+            self.movimiento_repository
+            .get_balance(
+                consumption_id
+            )
+        )
+
+        currency_symbol = (
+            "S/"
+            if balance["currency"] == "PEN"
+            else "US$"
+        )
+
+        deleted_amount = (
+            Decimal(
+                deleted_movement[
+                    "monto_centimos"
+                ]
+            )
+            / Decimal("100")
+        )
+
+        pending_amount = (
+            Decimal(
+                balance[
+                    "pending_cents"
+                ]
+            )
+            / Decimal("100")
+        )
+
+        message_lines = [
+            "Última asignación eliminada.",
+            "",
+            (
+                "Persona: "
+                f"{deleted_movement['persona']}"
+            ),
+            (
+                "Monto eliminado: "
+                f"{currency_symbol} "
+                f"{deleted_amount:.2f}"
+            ),
+            (
+                "Saldo pendiente: "
+                f"{currency_symbol} "
+                f"{pending_amount:.2f}"
+            ),
+        ]
+
+        return {
+            "deleted": True,
+            "action": "assignment_undone",
+            "movement_id": (
+                deleted_movement["id"]
+            ),
+            "consumption_id": consumption_id,
+            "person_id": (
+                deleted_movement["persona_id"]
+            ),
+            "person_name": (
+                deleted_movement["persona"]
+            ),
+            "currency": balance["currency"],
+            "currency_symbol": currency_symbol,
+            "deleted_cents": (
+                deleted_movement[
+                    "monto_centimos"
+                ]
+            ),
+            "pending_cents": (
+                balance["pending_cents"]
+            ),
+            "completed": balance["completed"],
+            "message": "\n".join(
+                message_lines
+            ),
+        }
+
     
     @staticmethod
     def _calculate_percentage_amount(
