@@ -106,6 +106,231 @@ class ConversationService:
             "options": options,
         }
 
+
+    def process_person_selection(
+        self,
+        estado_id,
+        consumption_id,
+        selected_option,
+        options,
+    ):
+        option = str(
+            selected_option
+        ).strip()
+
+        if option not in options:
+            return {
+                "valid": False,
+                "action": "invalid_option",
+                "message": (
+                    "La opción ingresada no es válida. "
+                    "Selecciona uno de los números "
+                    "mostrados en la lista."
+                ),
+                "person_id": None,
+                "person_name": None,
+            }
+
+        selected_value = options[option]
+
+        if selected_value == "__NEW_PERSON__":
+            return {
+                "valid": True,
+                "action": "request_new_person_name",
+                "message": (
+                    "Escribe el nombre de la "
+                    "nueva persona."
+                ),
+                "estado_id": estado_id,
+                "consumption_id": consumption_id,
+                "person_id": None,
+                "person_name": None,
+            }
+
+        person = (
+            self.persona_repository
+            .find_by_name(
+                selected_value
+            )
+        )
+
+        if person is None:
+            raise LookupError(
+                "La persona seleccionada "
+                "ya no existe"
+            )
+
+        balance = (
+            self.movimiento_repository
+            .get_balance(
+                consumption_id
+            )
+        )
+
+        if balance["completed"]:
+            raise ValueError(
+                "El consumo ya fue asignado "
+                "completamente"
+            )
+
+        currency_symbol = (
+            "S/"
+            if balance["currency"] == "PEN"
+            else "US$"
+        )
+
+        amount_question = (
+            self.build_assignment_amount_question(
+                person_name=person["nombre"],
+                pending_cents=(
+                    balance["pending_cents"]
+                ),
+                currency_symbol=currency_symbol,
+            )
+        )
+
+        return {
+            "valid": True,
+            "action": "request_amount",
+            "message": amount_question,
+            "estado_id": estado_id,
+            "consumption_id": consumption_id,
+            "person_id": person["id"],
+            "person_name": person["nombre"],
+            "pending_cents": (
+                balance["pending_cents"]
+            ),
+            "currency": balance["currency"],
+            "currency_symbol": currency_symbol,
+        }
+
+    def create_temporary_person(
+        self,
+        estado_id,
+        consumption_id,
+        person_name,
+    ):
+        normalized_name = " ".join(
+            str(person_name).split()
+        )
+
+        if not normalized_name:
+            return {
+                "created": False,
+                "action": "request_new_person_name",
+                "message": (
+                    "El nombre de la persona "
+                    "no puede estar vacío. "
+                    "Escribe un nombre válido."
+                ),
+                "person_id": None,
+                "person_name": None,
+            }
+
+        existing_person = (
+            self.persona_repository
+            .find_by_name(
+                normalized_name
+            )
+        )
+
+        if existing_person is not None:
+            return {
+                "created": False,
+                "action": "person_already_exists",
+                "message": (
+                    f'La persona "'
+                    f'{existing_person["nombre"]}'
+                    f'" ya existe.\n\n'
+                    "Selecciónala de la lista "
+                    "o escribe otro nombre."
+                ),
+                "person_id": (
+                    existing_person["id"]
+                ),
+                "person_name": (
+                    existing_person["nombre"]
+                ),
+            }
+
+        created = (
+            self.persona_repository
+            .add_temporary_person(
+                estado_id=estado_id,
+                person_name=normalized_name,
+            )
+        )
+
+        if not created:
+            raise RuntimeError(
+                "No se pudo crear la "
+                "persona temporal"
+            )
+
+        person = (
+            self.persona_repository
+            .find_by_name(
+                normalized_name
+            )
+        )
+
+        if person is None:
+            raise RuntimeError(
+                "La persona temporal fue creada, "
+                "pero no pudo recuperarse"
+            )
+
+        balance = (
+            self.movimiento_repository
+            .get_balance(
+                consumption_id
+            )
+        )
+
+        if balance["completed"]:
+            raise ValueError(
+                "El consumo ya fue asignado "
+                "completamente"
+            )
+
+        currency_symbol = (
+            "S/"
+            if balance["currency"] == "PEN"
+            else "US$"
+        )
+
+        amount_question = (
+            self.build_assignment_amount_question(
+                person_name=person["nombre"],
+                pending_cents=(
+                    balance["pending_cents"]
+                ),
+                currency_symbol=currency_symbol,
+            )
+        )
+
+        message = (
+            f'{person["nombre"]} fue agregado '
+            "como persona temporal.\n\n"
+            f"{amount_question}"
+        )
+
+        return {
+            "created": True,
+            "action": "request_amount",
+            "message": message,
+            "estado_id": estado_id,
+            "consumption_id": consumption_id,
+            "person_id": person["id"],
+            "person_name": person["nombre"],
+            "pending_cents": (
+                balance["pending_cents"]
+            ),
+            "currency": balance["currency"],
+            "currency_symbol": currency_symbol,
+        }
+
+
     def build_assignment_amount_question(
         self,
         person_name,

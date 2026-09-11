@@ -83,6 +83,61 @@ class PersonaRepository:
                 """
             )
 
+
+    def find_by_name(
+        self,
+        person_name,
+    ):
+        person_name = str(
+            person_name
+        ).strip()
+
+        if not person_name:
+            return None
+
+        with get_connection() as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    id,
+                    nombre,
+                    permanente
+                FROM personas
+                WHERE nombre = ?
+                """,
+                (person_name,),
+            ).fetchone()
+
+        if row is None:
+            return None
+
+        return dict(row)
+
+    def get_by_id(
+        self,
+        person_id,
+    ):
+        with get_connection() as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    id,
+                    nombre,
+                    permanente
+                FROM personas
+                WHERE id = ?
+                """,
+                (person_id,),
+            ).fetchone()
+
+        if row is None:
+            raise LookupError(
+                "No existe la persona"
+            )
+
+        return dict(row)
+
+
     def add_temporary_person(
         self,
         estado_id,
