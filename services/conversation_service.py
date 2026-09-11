@@ -5,9 +5,13 @@ from decimal import ROUND_HALF_UP
 from repositories.asignacion_repository import (
     AsignacionRepository,
 )
+from repositories.movimiento_asignacion_repository import (
+    MovimientoAsignacionRepository,
+)
 from repositories.persona_repository import (
     PersonaRepository,
 )
+
 
 
 class ConversationService:
@@ -18,6 +22,9 @@ class ConversationService:
         )
         self.persona_repository = (
             PersonaRepository()
+        )
+        self.movimiento_repository = (
+            MovimientoAsignacionRepository()
         )
 
     def build_next_question(self, estado_id):
@@ -187,6 +194,174 @@ class ConversationService:
             pending_cents=pending_cents,
         )
 
+
+    def register_assignment(
+        self,
+        consumption_id,
+        person_id,
+        user_input,
+    ):
+        balance_before = (
+            self.movimiento_repository
+            .get_balance(
+                consumption_id
+            )
+        )
+
+        if balance_before["completed"]:
+            raise ValueError(
+                "El consumo ya fue asignado "
+                "completamente"
+            )
+
+        calculated = (
+            self.calculate_assignment_amount(
+                user_input=user_input,
+                pending_cents=(
+                    balance_before[
+                        "pending_cents"
+                    ]
+                ),
+            )
+        )
+
+        movement_id = (
+            self.movimiento_repository
+            .add_movement(
+                consumption_id=consumption_id,
+                person_id=person_id,
+                amount_cents=(
+                    calculated[
+                        "amount_cents"
+                    ]
+                ),
+            )
+        )
+
+        movements = (
+            self.movimiento_repository
+            .list_movements(
+                consumption_id
+            )
+        )
+
+        movement = next(
+            item
+            for item in movements
+            if item["id"] == movement_id
+        )
+
+        balance_after = (
+            self.movimiento_repository
+            .get_balance(
+                consumption_id
+            )
+        )
+
+        currency_symbol = (
+            "S/"
+            if balance_after["currency"]
+            == "PEN"
+            else "US$"
+        )
+
+        assigned_amount = (
+            Decimal(
+                calculated["amount_cents"]
+            )
+            / Decimal("100")
+        )
+
+        pending_amount = (
+            Decimal(
+                balance_after[
+                    "pending_cents"
+                ]
+            )
+            / Decimal("100")
+        )
+
+        message_lines = [
+            "Asignación registrada.",
+            "",
+            (
+                "Persona: "
+                f"{movement['persona']}"
+            ),
+        ]
+
+        if (
+            calculated["input_type"]
+            == "percentage"
+        ):
+            message_lines.append(
+                (
+                    "Porcentaje ingresado: "
+                    f"{calculated['input_value']}%"
+                )
+            )
+
+        message_lines.extend(
+            [
+                (
+                    "Monto asignado: "
+                    f"{currency_symbol} "
+                    f"{assigned_amount:.2f}"
+                ),
+                (
+                    "Saldo pendiente: "
+                    f"{currency_symbol} "
+                    f"{pending_amount:.2f}"
+                ),
+            ]
+        )
+
+        if balance_after["completed"]:
+            message_lines.extend(
+                [
+                    "",
+                    (
+                        "El consumo fue asignado "
+                        "completamente."
+                    ),
+                ]
+            )
+
+        return {
+            "movement_id": movement_id,
+            "person_id": person_id,
+            "person_name": (
+                movement["persona"]
+            ),
+            "currency": (
+                balance_after["currency"]
+            ),
+            "currency_symbol": (
+                currency_symbol
+            ),
+            "input_type": (
+                calculated["input_type"]
+            ),
+            "input_value": (
+                calculated["input_value"]
+            ),
+            "assigned_cents": (
+                calculated["amount_cents"]
+            ),
+            "pending_cents": (
+                balance_after[
+                    "pending_cents"
+                ]
+            ),
+            "completed": (
+                balance_after["completed"]
+            ),
+            "message": "\n".join(
+                message_lines
+            ),
+        }
+    
+    
     @staticmethod
     def _calculate_percentage_amount(
         value,
