@@ -97,17 +97,78 @@ class AsignacionRepository:
         with get_connection() as connection:
             rows = connection.execute(
                 """
+                WITH consumos_con_saldo AS (
+                    SELECT
+                        c.id,
+                        c.fecha,
+                        c.descripcion,
+                        c.monto_soles_centimos,
+                        c.monto_dolares_centimos,
+                        CASE
+                            WHEN
+                                c.monto_soles_centimos > 0
+                                AND
+                                c.monto_dolares_centimos = 0
+                            THEN 'PEN'
+
+                            WHEN
+                                c.monto_dolares_centimos > 0
+                                AND
+                                c.monto_soles_centimos = 0
+                            THEN 'USD'
+                        END AS moneda,
+                        CASE
+                            WHEN
+                                c.monto_soles_centimos > 0
+                                AND
+                                c.monto_dolares_centimos = 0
+                            THEN c.monto_soles_centimos
+
+                            WHEN
+                                c.monto_dolares_centimos > 0
+                                AND
+                                c.monto_soles_centimos = 0
+                            THEN c.monto_dolares_centimos
+
+                            ELSE 0
+                        END AS total_centimos,
+                        COALESCE(
+                            SUM(
+                                ma.monto_centimos
+                            ),
+                            0
+                        ) AS asignado_centimos
+                    FROM consumos AS c
+                    LEFT JOIN movimientos_asignacion AS ma
+                        ON ma.consumo_id = c.id
+                    WHERE c.estado_id = ?
+                      AND c.titular = ?
+                      AND c.asignacion = ?
+                    GROUP BY
+                        c.id,
+                        c.fecha,
+                        c.descripcion,
+                        c.monto_soles_centimos,
+                        c.monto_dolares_centimos
+                )
+
                 SELECT
                     id,
                     fecha,
                     descripcion,
                     monto_soles_centimos,
-                    monto_dolares_centimos
-                FROM consumos
-                WHERE estado_id = ?
-                  AND titular = ?
-                  AND persona_id IS NULL
-                  AND asignacion = ?
+                    monto_dolares_centimos,
+                    moneda,
+                    total_centimos,
+                    asignado_centimos,
+                    (
+                        total_centimos
+                        - asignado_centimos
+                    ) AS pendiente_centimos
+                FROM consumos_con_saldo
+                WHERE total_centimos > 0
+                  AND asignado_centimos
+                      < total_centimos
                 ORDER BY id
                 """,
                 (
@@ -122,15 +183,34 @@ class AsignacionRepository:
                 "id": row["id"],
                 "fecha": row["fecha"],
                 "descripcion": row["descripcion"],
+                "moneda": row["moneda"],
+                "total_centimos": (
+                    row["total_centimos"]
+                ),
+                "asignado_centimos": (
+                    row["asignado_centimos"]
+                ),
+                "pendiente_centimos": (
+                    row["pendiente_centimos"]
+                ),
                 "soles": (
-                    row["monto_soles_centimos"] / 100
+                    row["monto_soles_centimos"]
+                    / 100
                 ),
                 "dolares": (
-                    row["monto_dolares_centimos"] / 100
+                    row[
+                        "monto_dolares_centimos"
+                    ]
+                    / 100
+                ),
+                "saldo_pendiente": (
+                    row["pendiente_centimos"]
+                    / 100
                 ),
             }
             for row in rows
         ]
+
 
     def assign_consumption(
         self,

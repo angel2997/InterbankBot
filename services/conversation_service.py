@@ -27,7 +27,10 @@ class ConversationService:
             MovimientoAsignacionRepository()
         )
 
-    def build_next_question(self, estado_id):
+    def build_next_question(
+        self,
+        estado_id,
+    ):
         pending = (
             self.asignacion_repository
             .list_pending_angel_consumptions(
@@ -56,24 +59,82 @@ class ConversationService:
 
         options = {}
 
+        currency_symbol = (
+            "S/"
+            if consumption["moneda"] == "PEN"
+            else "US$"
+        )
+
+        total_amount = (
+            Decimal(
+                consumption[
+                    "total_centimos"
+                ]
+            )
+            / Decimal("100")
+        )
+
+        assigned_amount = (
+            Decimal(
+                consumption[
+                    "asignado_centimos"
+                ]
+            )
+            / Decimal("100")
+        )
+
+        pending_amount = (
+            Decimal(
+                consumption[
+                    "pendiente_centimos"
+                ]
+            )
+            / Decimal("100")
+        )
+
         message_lines = [
-            f"Consumo pendiente 1 de {len(pending)}",
+            (
+                "Consumo pendiente "
+                f"1 de {len(pending)}"
+            ),
             "",
-            f"Fecha: {consumption['fecha']}",
+            (
+                "Fecha: "
+                f"{consumption['fecha']}"
+            ),
             (
                 "Descripción: "
                 f"{consumption['descripcion']}"
             ),
-            f"Monto: S/ {consumption['soles']:.2f}",
+            (
+                "Monto total: "
+                f"{currency_symbol} "
+                f"{total_amount:.2f}"
+            ),
+            (
+                "Monto asignado: "
+                f"{currency_symbol} "
+                f"{assigned_amount:.2f}"
+            ),
+            (
+                "Saldo pendiente: "
+                f"{currency_symbol} "
+                f"{pending_amount:.2f}"
+            ),
             "",
-            "¿A quién pertenece?",
+            (
+                "¿A quién deseas asignar "
+                "el saldo pendiente?"
+            ),
         ]
 
         for number, person in enumerate(
             people,
             start=1,
         ):
-            options[str(number)] = person["nombre"]
+            options[str(number)] = (
+                person["nombre"]
+            )
 
             person_type = (
                 ""
@@ -96,17 +157,60 @@ class ConversationService:
         )
 
         message_lines.append(
-            f"{new_person_option}. Nueva persona"
+            (
+                f"{new_person_option}. "
+                "Nueva persona"
+            )
         )
+
+        movements = (
+            self.movimiento_repository
+            .list_movements(
+                consumption["id"]
+            )
+        )
+
+        if movements:
+            message_lines.extend(
+                [
+                    "",
+                    (
+                        'Escribe "Deshacer" para '
+                        "eliminar la última asignación."
+                    ),
+                ]
+            )
 
         return {
             "completed": False,
-            "message": "\n".join(message_lines),
+            "message": "\n".join(
+                message_lines
+            ),
             "consumption": consumption,
             "options": options,
+            "currency": (
+                consumption["moneda"]
+            ),
+            "currency_symbol": currency_symbol,
+            "total_cents": (
+                consumption[
+                    "total_centimos"
+                ]
+            ),
+            "assigned_cents": (
+                consumption[
+                    "asignado_centimos"
+                ]
+            ),
+            "pending_cents": (
+                consumption[
+                    "pendiente_centimos"
+                ]
+            ),
+            "can_undo": bool(movements),
         }
 
-
+ 
     def process_person_selection(
         self,
         estado_id,
