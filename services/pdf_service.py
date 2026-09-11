@@ -19,25 +19,20 @@ TRANSACTION_PATTERN = re.compile(
     r"(?P<soles>-?[\d,]+\.\d{2})"
     r"(?:\s+(?P<dollars>-?[\d,]+\.\d{2}))?\s*$"
 )
+MONEY_PATTERN = re.compile(
+    r"-?[\d,]+\.\d{2}"
+)
 
 PAYMENT_MONTH_PATTERN = re.compile(
-    r"PAGO\s+DEL\s+MES"
-    r".*?"
-    r"(?P<soles>-?[\d,]+\.\d{2})"
-    r"\s+"
-    r"(?P<dollars>-?[\d,]+\.\d{2})",
+    r"^PAGO\s+DEL\s+MES\b",
     re.IGNORECASE,
 )
 
 INSURANCE_PATTERN = re.compile(
-    r"\d{2}-[A-Za-z]{3}\s+"
-    r"SEGURO(?:\s+DE)?\s+DESGRAVAMEN"
-    r"\s+"
-    r"(?P<soles>-?[\d,]+\.\d{2})"
-    r"(?:\s+(?P<dollars>-?[\d,]+\.\d{2}))?",
+    r"^\d{2}-[A-Za-z]{3}\s+"
+    r"SEGURO(?:\s+DE)?\s+DESGRAVAMEN\b",
     re.IGNORECASE,
 )
-
 
 class PdfService:
 
@@ -175,19 +170,15 @@ class PdfService:
             if line.strip()
         ]
 
-        normalized_text = " ".join(
-            normalized_lines
-        )
-
         payment = (
             self._extract_payment_month(
-                normalized_text
+                normalized_lines
             )
         )
 
         insurance = (
             self._extract_insurance_amount(
-                normalized_text
+                normalized_lines
             )
         )
 
@@ -198,52 +189,78 @@ class PdfService:
 
     def _extract_payment_month(
         self,
-        text,
+        lines,
     ):
-        match = PAYMENT_MONTH_PATTERN.search(
-            text
-        )
+        for line in lines:
+            if not PAYMENT_MONTH_PATTERN.search(
+                line
+            ):
+                continue
 
-        if match is None:
-            raise ValueError(
-                "No se encontró el importe "
-                "PAGO DEL MES en el PDF"
+            amounts = (
+                MONEY_PATTERN.findall(
+                    line
+                )
             )
 
-        return {
-            "soles": self._to_decimal(
-                match.group("soles")
-            ),
-            "dollars": self._to_decimal(
-                match.group("dollars")
-            ),
-        }
+            if len(amounts) < 2:
+                continue
 
+            return {
+                "soles": self._to_decimal(
+                    amounts[-2]
+                ),
+                "dollars": self._to_decimal(
+                    amounts[-1]
+                ),
+            }
+
+        raise ValueError(
+            "No se encontró el importe "
+            "PAGO DEL MES en el PDF"
+        )
+ 
     def _extract_insurance_amount(
         self,
-        text,
+        lines,
     ):
-        match = INSURANCE_PATTERN.search(
-            text
-        )
+        for line in lines:
+            if not INSURANCE_PATTERN.search(
+                line
+            ):
+                continue
 
-        if match is None:
-            raise ValueError(
-                "No se encontró el importe "
-                "del seguro de desgravamen "
-                "en el PDF"
+            amounts = (
+                MONEY_PATTERN.findall(
+                    line
+                )
             )
 
-        return {
-            "soles": self._to_decimal(
-                match.group("soles")
-            ),
-            "dollars": self._to_decimal(
-                match.group("dollars")
-                or "0.00"
-            ),
-        }
+            if not amounts:
+                continue
 
+            soles = self._to_decimal(
+                amounts[0]
+            )
+
+            dollars = Decimal("0.00")
+
+            if len(amounts) >= 2:
+                dollars = self._to_decimal(
+                    amounts[1]
+                )
+
+            return {
+                "soles": soles,
+                "dollars": dollars,
+            }
+
+        raise ValueError(
+            "No se encontró el importe "
+            "del seguro de desgravamen "
+            "en el PDF"
+        )
+    
     def _extract_section(
         self,
         text,

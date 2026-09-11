@@ -135,8 +135,7 @@ class StatementSummaryTest(
         26-Ago SEGURO DE DESGRAVAMEN 7.10 0.00
         SUBTOTAL 7.10 0.00
 
-        PAGO DEL MES (Suma de subtotales)
-        = 1,741.85 126.58
+        PAGO DEL MES (Suma de subtotales) = 1,741.85 126.58
         """
 
         summary = (
@@ -273,8 +272,7 @@ class StatementSummaryTest(
         self,
     ):
         text = """
-        PAGO DEL MES
-        = 1,741.85 126.58
+        PAGO DEL MES = 1,741.85 126.58
         """
 
         with self.assertRaisesRegex(
