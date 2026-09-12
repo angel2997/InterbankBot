@@ -632,6 +632,50 @@ class TxtService:
                 ),
             }
 
+    def generate_all_files(
+        self,
+        estado_id,
+    ):
+        person_files = (
+            self.generate_person_files(
+                estado_id=estado_id
+            )
+        )
+
+        total_file = (
+            self.generate_total_file(
+                estado_id=estado_id
+            )
+        )
+
+        generated_paths = [
+            item["file_path"]
+            for item in person_files
+        ]
+
+        generated_paths.append(
+            total_file["file_path"]
+        )
+
+        return {
+            "estado_id": estado_id,
+            "person_files": person_files,
+            "total_file": total_file,
+            "person_file_count": len(
+                person_files
+            ),
+            "total_file_count": 1,
+            "generated_file_count": len(
+                generated_paths
+            ),
+            "generated_paths": (
+                generated_paths
+            ),
+            "balanced": (
+                total_file["balanced"]
+            ),
+        }
+
     def _build_person_content(
         self,
         period,
