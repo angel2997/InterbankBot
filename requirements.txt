@@ -1,9 +1,6 @@
 pypdf
 requests
 python-dotenv
-
-**************
-
 msal
 O365
 pywhatkit
