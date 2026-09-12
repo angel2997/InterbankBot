@@ -14,16 +14,30 @@ from services.conversation_service import (
     ConversationService,
 )
 
+from services.txt_service import TxtService
+
 
 class ConversationEngineService:
 
-    def __init__(self):
+    def __init__(
+        self,
+        conversation_service=None,
+        session_repository=None,
+        txt_service=None,
+    ):
         self.conversation_service = (
-            ConversationService()
+            conversation_service
+            or ConversationService()
         )
 
         self.session_repository = (
-            ConversationSessionRepository()
+            session_repository
+            or ConversationSessionRepository()
+        )
+
+        self.txt_service = (
+            txt_service
+            or TxtService()
         )
 
     def start_conversation(
@@ -314,13 +328,80 @@ class ConversationEngineService:
         )
 
         if next_question["completed"]:
+            try:
+                txt_result = (
+                    self.txt_service
+                    .generate_all_files(
+                        estado_id=(
+                            session["estado_id"]
+                        )
+                    )
+                )
+
+            except (
+                ValueError,
+                LookupError,
+                OSError,
+            ) as error:
+                return {
+                    "action": (
+                        "txt_generation_failed"
+                    ),
+                    "completed": False,
+                    "message": (
+                        f"{assignment['message']}\n\n"
+                        "Todos los consumos fueron "
+                        "asignados, pero no se pudieron "
+                        "generar los archivos TXT.\n\n"
+                        f"Detalle: {error}\n\n"
+                        "La sesión se conservará para "
+                        "poder reintentar."
+                    ),
+                    "assignment": assignment,
+                    "txt_result": None,
+                    "session": session,
+                }
+
             self.session_repository.delete_session(
                 whatsapp_number
             )
 
+            person_file_count = (
+                txt_result[
+                    "person_file_count"
+                ]
+            )
+
+            generated_file_count = (
+                txt_result[
+                    "generated_file_count"
+                ]
+            )
+
+            if txt_result["balanced"]:
+                verification_message = (
+                    "La comprobación de Total.txt "
+                    "no presenta diferencias."
+                )
+
+            else:
+                verification_message = (
+                    "Advertencia: Total.txt presenta "
+                    "una diferencia pendiente "
+                    "de revisión."
+                )
+
             message_text = (
                 f"{assignment['message']}\n\n"
-                f"{next_question['message']}"
+                f"{next_question['message']}\n\n"
+                "Archivos TXT generados "
+                "correctamente.\n"
+                "Archivos individuales: "
+                f"{person_file_count}\n"
+                "Archivo consolidado: Total.txt\n"
+                "Total de archivos: "
+                f"{generated_file_count}\n\n"
+                f"{verification_message}"
             )
 
             return {
@@ -328,6 +409,7 @@ class ConversationEngineService:
                 "completed": True,
                 "message": message_text,
                 "assignment": assignment,
+                "txt_result": txt_result,
                 "session": None,
             }
 
