@@ -275,6 +275,129 @@ class MovimientoAsignacionRepository:
             for row in rows
         ]
 
+    def list_movements_by_statement(
+        self,
+        estado_id,
+    ):
+        with get_connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    ma.id AS movimiento_id,
+                    c.id AS consumo_id,
+                    p.id AS persona_id,
+                    p.nombre AS persona,
+                    c.fecha,
+                    c.descripcion,
+                    ma.moneda,
+                    ma.monto_centimos,
+                    ma.fecha_registro,
+                    'MOVIMIENTO' AS origen
+                FROM movimientos_asignacion AS ma
+                INNER JOIN consumos AS c
+                    ON c.id = ma.consumo_id
+                INNER JOIN personas AS p
+                    ON p.id = ma.persona_id
+                WHERE c.estado_id = ?
+
+                UNION ALL
+
+                SELECT
+                    NULL AS movimiento_id,
+                    c.id AS consumo_id,
+                    p.id AS persona_id,
+                    p.nombre AS persona,
+                    c.fecha,
+                    c.descripcion,
+                    CASE
+                        WHEN
+                            c.monto_soles_centimos > 0
+                            AND
+                            c.monto_dolares_centimos = 0
+                        THEN 'PEN'
+
+                        WHEN
+                            c.monto_dolares_centimos > 0
+                            AND
+                            c.monto_soles_centimos = 0
+                        THEN 'USD'
+                    END AS moneda,
+                    CASE
+                        WHEN
+                            c.monto_soles_centimos > 0
+                            AND
+                            c.monto_dolares_centimos = 0
+                        THEN c.monto_soles_centimos
+
+                        WHEN
+                            c.monto_dolares_centimos > 0
+                            AND
+                            c.monto_soles_centimos = 0
+                        THEN c.monto_dolares_centimos
+
+                        ELSE 0
+                    END AS monto_centimos,
+                    NULL AS fecha_registro,
+                    'AUTOMATICA' AS origen
+                FROM consumos AS c
+                INNER JOIN personas AS p
+                    ON p.id = c.persona_id
+                WHERE c.estado_id = ?
+                  AND c.asignacion = ?
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM movimientos_asignacion AS ma
+                      WHERE ma.consumo_id = c.id
+                  )
+
+                ORDER BY
+                    persona,
+                    consumo_id,
+                    movimiento_id
+                """,
+                (
+                    estado_id,
+                    estado_id,
+                    "AUTOMATICA",
+                ),
+            ).fetchall()
+
+        return [
+            dict(row)
+            for row in rows
+            if (
+                row["moneda"] is not None
+                and row["monto_centimos"] > 0
+            )
+        ]
+
+    def get_distributed_totals(
+        self,
+        estado_id,
+    ):
+        movements = (
+            self.list_movements_by_statement(
+                estado_id
+            )
+        )
+
+        total_pen_cents = sum(
+            movement["monto_centimos"]
+            for movement in movements
+            if movement["moneda"] == "PEN"
+        )
+
+        total_usd_cents = sum(
+            movement["monto_centimos"]
+            for movement in movements
+            if movement["moneda"] == "USD"
+        )
+
+        return {
+            "PEN": total_pen_cents,
+            "USD": total_usd_cents,
+        }
+
     def delete_last_movement(
         self,
         consumption_id,
