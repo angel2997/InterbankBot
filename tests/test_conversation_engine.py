@@ -2,6 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+
 import database.db as database_module
 from database.db import get_connection
 from repositories.conversation_session_repository import (
@@ -16,6 +17,7 @@ from repositories.conversation_session_repository import (
 from services.conversation_engine_service import (
     ConversationEngineService,
 )
+from unittest.mock import MagicMock
 
 
 class ConversationEngineTest(
@@ -41,8 +43,30 @@ class ConversationEngineTest(
         self._create_base_tables()
         self._insert_test_data()
 
+        self.txt_service = MagicMock()
+
+        (
+            self.txt_service
+            .generate_all_files
+            .return_value
+        ) = {
+            "estado_id": 1,
+            "person_files": [],
+            "total_file": {
+                "file_name": "Total.txt",
+                "balanced": True,
+            },
+            "person_file_count": 1,
+            "total_file_count": 1,
+            "generated_file_count": 2,
+            "generated_paths": [],
+            "balanced": True,
+        }
+
         self.engine = (
-            ConversationEngineService()
+            ConversationEngineService(
+                txt_service=self.txt_service
+            )
         )
 
         (

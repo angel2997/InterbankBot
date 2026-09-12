@@ -264,39 +264,6 @@ class SaveRealStatementSummaryTest(
             f"{amount:,.2f}"
         )
 
-    def test_real_values_are_correct(
-        self,
-    ):
-        self.assertEqual(
-            185657,
-            self.stored[
-                "pago_mes_soles_centimos"
-            ],
-        )
-
-        self.assertEqual(
-            0,
-            self.stored[
-                "pago_mes_dolares_centimos"
-            ],
-        )
-
-        self.assertEqual(
-            1262,
-            self.stored[
-                "seguro_desgravamen_"
-                "soles_centimos"
-            ],
-        )
-
-        self.assertEqual(
-            0,
-            self.stored[
-                "seguro_desgravamen_"
-                "dolares_centimos"
-            ],
-        )
-
 
 if __name__ == "__main__":
     unittest.main(

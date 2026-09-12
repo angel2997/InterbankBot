@@ -7,6 +7,11 @@ from database.db import get_connection
 from services.whatsapp_service import (
     WhatsappService,
 )
+from unittest.mock import MagicMock
+
+from services.conversation_engine_service import (
+    ConversationEngineService,
+)
 
 
 class WhatsappServiceTest(
@@ -36,10 +41,39 @@ class WhatsappServiceTest(
             "+51999999999"
         )
 
+        self.txt_service = MagicMock()
+
+        (
+            self.txt_service
+            .generate_all_files
+            .return_value
+        ) = {
+            "estado_id": 1,
+            "person_files": [],
+            "total_file": {
+                "file_name": "Total.txt",
+                "balanced": True,
+            },
+            "person_file_count": 1,
+            "total_file_count": 1,
+            "generated_file_count": 2,
+            "generated_paths": [],
+            "balanced": True,
+        }
+
+        conversation_engine = (
+            ConversationEngineService(
+                txt_service=self.txt_service
+            )
+        )
+
         self.service = WhatsappService(
             allowed_number=(
                 self.allowed_number
-            )
+            ),
+            conversation_engine=(
+                conversation_engine
+            ),
         )
 
         self.service.prepare_tables()
